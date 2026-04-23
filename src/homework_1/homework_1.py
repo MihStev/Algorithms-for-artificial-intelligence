@@ -154,3 +154,109 @@ def genetic_alghorithm(population_size, generations, muation_rate):
 best_individual, best_fitness = genetic_alghorithm(population_size=50, generations=100, muation_rate=0.1)
 print(f"Best individual found: {best_individual}")
 print(f"Best fitness (minimum f(x)): {best_fitness:.6f}")
+
+
+# %% Particle Swarm Optimization (PSO) Placeholder
+# Vectorized implementation of PSO for optimization
+# instead of for loops
+
+def pso(num_particles=30, iterations=100, n_dims=3, w=0.7, v_max=0.2):
+    particles  = np.random.uniform(-1, 1, (num_particles, n_dims))
+    velocities = np.random.uniform(-0.1, 0.1, (num_particles, n_dims))
+
+    pbest_pos     = np.copy(particles)
+    pbest_fitness = np.array([objective_function(p) for p in particles])
+    gbest_idx     = np.argmin(pbest_fitness)
+    gbest_pos     = np.copy(pbest_pos[gbest_idx])
+    gbest_fitness = pbest_fitness[gbest_idx]
+
+    history = [gbest_fitness]
+    for _ in range(iterations):
+        r1 = np.random.rand(num_particles, n_dims)
+        r2 = np.random.rand(num_particles, n_dims)
+
+        # Update velocities and positions
+        velocities = (w * velocities
+                      + 2 * r1 * (pbest_pos - particles)
+                      + 2 * r2 * (gbest_pos - particles))
+        velocities = np.clip(velocities, -v_max, v_max)  # velocity clamping
+        particles += velocities
+        particles  = np.clip(particles, -1, 1)
+
+        # Update pbest and gbest
+        fitness = np.array([objective_function(p) for p in particles])
+        improved = fitness < pbest_fitness
+        pbest_pos[improved]     = np.copy(particles[improved])
+        pbest_fitness[improved] = fitness[improved]
+
+        best_idx = np.argmin(pbest_fitness)
+        if pbest_fitness[best_idx] < gbest_fitness:
+            gbest_fitness = pbest_fitness[best_idx]
+            gbest_pos     = np.copy(pbest_pos[best_idx])
+        history.append(gbest_fitness)
+    return gbest_pos, gbest_fitness, history
+# %% Visualization of PSO convergence
+# Sanity check
+print("=== Sanity check ===")
+print(f"f([0,0,0])   = {objective_function([0,0,0]):.6f}  (expected: 0.000000)")
+print(f"f([1,1,1])   = {objective_function([1,1,1]):.6f}  (expected: 2.333333)")
+print(f"f([-1,-1,0]) = {objective_function([-1,-1,0]):.6f}  (expected: 1.333333)")
+print()
+ 
+ 
+# Monte Carlo simulation of PSO (N=50 iterations)
+N_MC = 50
+results = [pso(num_particles=30, iterations=100) for _ in range(N_MC)]
+fitnesses = [r[1] for r in results]
+best_run  = results[np.argmin(fitnesses)]
+ 
+print("=== Monte Carlo results (N=50, 30 particles, 100 iterations) ===")
+print(f"Average f value : {np.mean(fitnesses):.6f}")
+print(f"Standard deviation      : {np.std(fitnesses):.6f}")
+print(f"Minimum f               : {np.min(fitnesses):.6f}")
+print(f"Maximum f               : {np.max(fitnesses):.6f}")
+print(f"Best position   : {np.round(best_run[0], 5)}")
+print()
+ 
+# GRAPH 1 - Convergence of PSO (N=50 Monte Carlo runs)
+histories = np.array([r[2] for r in results])
+mean_hist = histories.mean(axis=0)
+std_hist  = histories.std(axis=0)
+iters     = np.arange(len(mean_hist))
+ 
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(iters, mean_hist, color="#1f77b4", linewidth=2, label="Average gbest")
+ax.fill_between(iters,
+                mean_hist - std_hist,
+                mean_hist + std_hist,
+                alpha=0.2, color="#1f77b4", label="±1 std")
+ax.set_xlabel("Iteration")
+ax.set_ylabel("f(gbest)")
+ax.set_title("Convergence of PSO (N=50 Monte Carlo runs)")
+ax.legend()
+plt.tight_layout()
+plt.show()
+ 
+ 
+# GRAPH 2 — Impact of Particle Count
+particle_counts = [5, 10, 20, 30, 50, 100]
+N_MC2 = 30
+ 
+mean_fits, std_fits = [], []
+for np_ in particle_counts:
+    fs = [pso(num_particles=np_, iterations=100)[1] for _ in range(N_MC2)]
+    mean_fits.append(np.mean(fs))
+    std_fits.append(np.std(fs))
+ 
+mean_fits = np.array(mean_fits)
+std_fits  = np.array(std_fits)
+ 
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.errorbar(particle_counts, mean_fits, yerr=std_fits,
+            fmt="o-", color="#2ca02c", capsize=5, linewidth=2, markersize=6)
+ax.set_xlabel("Number of Particles (N)")
+ax.set_ylabel("Average f value")
+ax.set_title("Impact of Particle Count (N=30 MC, 100 iterations)")
+plt.tight_layout()
+plt.show()
+            
