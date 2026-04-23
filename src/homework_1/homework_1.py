@@ -2,7 +2,7 @@
 # %% Homework 1: Simulated Annealing for Function Optimization
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 def objective_function(x):
     # f(x) = 4/3 * (x1^2 + x2^2 - x1*x2)^0.75 + |x3|
     term1 = (x[0]**2 + x[1]**2 - x[0]*x[1])**0.75
@@ -105,56 +105,197 @@ plt.ylabel('Frequency')
 plt.legend()
 plt.show()
 
-# %% 
+# %% Genetic Algorithm Implementation
 
-def genetic_alghorithm(population_size, generations, muation_rate):
-    # Placeholder for genetic algorithm implementation
-    # initialize population, evaluate fitness, selection, crossover, mutation
+def genetic_algorithm(population_size, generations, mutation_rate, tournament_size=3):
+    # Inicijalizacija
     population = np.random.uniform(-1, 1, (population_size, 3))
-    best_individual = None
-    best_fitness = float('inf')
+    
+    # Elitism: tracking the best ever found solution
+    best_ind = None
+    best_fit = float('inf')
+    
+    # For the plot: tracking average fitness across generations
+    avg_fitness_history = []
 
-    fitness = np.array([objective_function(ind) for ind in population])
-    best_idx = np.argmin(fitness)
-    best_individual = population[best_idx]
-    best_fitness = fitness[best_idx]
     for gen in range(generations):
-        # Selection (tournament selection)
-        selected_indices = np.random.choice(population_size, size=population_size, replace=True, p=(1/fitness)/np.sum(1/fitness))
-        selected_population = population[selected_indices]
+        fitness = np.array([objective_function(ind) for ind in population])
+        
+        # Update najboljeg (Elitizam)
+        current_min_idx = np.argmin(fitness)
+        if fitness[current_min_idx] < best_fit:
+            best_fit = fitness[current_min_idx]
+            best_ind = np.copy(population[current_min_idx])
+            
+        avg_fitness_history.append(np.mean(fitness))
 
-        # Crossover (single point)
+        # 1. SELEKCIJA (Tournament)
+        new_population = []
+        for _ in range(population_size):
+            # Izaberemo nasumičnih k jedinki
+            candidates_idx = np.random.choice(population_size, tournament_size)
+            # Pobednik je onaj sa najmanjim fitnessom
+            winner_idx = candidates_idx[np.argmin(fitness[candidates_idx])]
+            new_population.append(population[winner_idx])
+        
+        new_population = np.array(new_population)
+
+        # 2. UKRŠTANJE (Aritmetičko - bolje za realne brojeve)
         offspring = []
         for i in range(0, population_size, 2):
-            parent1 = selected_population[i]
-            parent2 = selected_population[i+1]
-            crossover_point = np.random.randint(1, 3) 
-            child1 = np.concatenate((parent1[:crossover_point], parent2[crossover_point:]))
-            child2 = np.concatenate((parent2[:crossover_point], parent1[crossover_point:]))
+            p1 = new_population[i]
+            # Handle neparan broj populacije
+            p2 = new_population[i+1] if (i+1) < population_size else new_population[0]
+            
+            alpha = np.random.rand()
+            child1 = alpha * p1 + (1 - alpha) * p2
+            child2 = alpha * p2 + (1 - alpha) * p1
             offspring.append(child1)
             offspring.append(child2)
+            
+        # Skrati ako je dodat jedan višak zbog neparnog broja
+        offspring = np.array(offspring[:population_size])
 
-        # Mutation
+        # 3. MUTACIJA
         for i in range(population_size):
-            if np.random.rand() < muation_rate:
-                mutation_vector = np.random.normal(0, 0.1, size=3)
-                offspring[i] += mutation_vector
+            if np.random.rand() < mutation_rate:
+                # Dodajemo Gausov šum
+                offspring[i] += np.random.normal(0, 0.1, size=3)
                 offspring[i] = np.clip(offspring[i], -1, 1)
 
-        population = np.array(offspring)
-        fitness = np.array([objective_function(ind) for ind in population])
-        best_idx = np.argmin(fitness)
-        if fitness[best_idx] < best_fitness:
-            best_fitness = fitness[best_idx]
-            best_individual = population[best_idx]
-    return best_individual, best_fitness
+        # Ubaci najboljeg iz prethodne generacije (Elitizam) nazad na slučajno mesto
+        population = offspring
+        population[np.random.randint(population_size)] = best_ind
 
-# %% Testing the genetic algorithm
+    return best_ind, best_fit, avg_fitness_history
 
-best_individual, best_fitness = genetic_alghorithm(population_size=50, generations=100, muation_rate=0.1)
-print(f"Best individual found: {best_individual}")
-print(f"Best fitness (minimum f(x)): {best_fitness:.6f}")
+# %% Monte Carlo za Genetski Algoritam (Traženi grafici)
 
+
+def run_mc_ga():
+    # Parametri za testiranje efikasnosti
+    pop_sizes = [10, 20, 50, 100]
+    gens = 100
+    num_mc = 20
+    
+    results = []
+    complexities = []
+
+    print("Running MC for GA...")
+    for pop in pop_sizes:
+        current_pop_results = []
+        for _ in range(num_mc):
+            _, b_fit, _ = genetic_algorithm(pop, gens, 0.1)
+            current_pop_results.append(b_fit)
+        
+        results.append(np.mean(current_pop_results))
+        complexities.append(pop * gens) # Broj računskih operacija
+
+    # GRAFIK 1: Računarska efikasnost (Traženo u tekstu zadatka)
+    plt.figure(figsize=(10, 5))
+    plt.plot(complexities, results, 'o-', color='red', label='Average Best Fitness')
+    plt.xlabel('Number of Computational Operations (Pop_size * Gen)')
+    plt.ylabel('Average Fitness (min f(x))')
+    plt.title('Efficiency of the Genetic Algorithm')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    # GRAFIK 2: Uticaj verovatnoće mutacije
+    mutations = [0.01, 0.1, 0.5]
+    plt.figure(figsize=(10, 5))
+    for m in mutations:
+        _, _, history = genetic_algorithm(50, 100, m)
+        plt.plot(history, label=f'Mutation Rate = {m}')
+    
+    plt.xlabel('Generation')
+    plt.ylabel('Average Fitness of Population')
+    plt.title('Impact of Mutation Rate on Convergence')
+    plt.legend()
+    plt.show()
+
+run_mc_ga()
+
+# %% Comparison of Simulated Annealing and Genetic Algorithm
+# %% [markdown]
+# Radi fer poređenja algoritama na statistički značajan način, parametri su podešeni tako da oba algoritma vrše približno isti broj evaluacija funkcije cilja (
+# N\approx15.750
+# ). Za Simulirano kaljenje, pri hlađenju sa T=10 na T={10}^{-6} uz faktor \alpha=0.95,
+# algoritam izvršava oko 315 koraka hlađenja sa po 50 unutrašnjih iteracija. 
+# Da bi se postigla ista kompleksnost, Genetski algoritam je konfigurisan sa populacijom od 50 jedinki
+# kroz 315 generacija. Na ovaj način, razlika u kvalitetu rešenja potiče isključivo od efikasnosti
+# same strategije pretrage, a ne od količine uloženih računarskih resursa.
+
+#%%
+def compare_sa_ga(num_runs=50):
+    sa_results = []
+    ga_results = []
+    
+    # Za intuitivni grafik konvergencije uzećemo po 5 reprezentativnih pokretanja
+    sa_histories = []
+    ga_histories = []
+
+    print(f"Pokrećem poređenje: {num_runs} MC simulacija po algoritmu...")
+
+    # --- TESTIRANJE SA ---
+    start_sa = time.time()
+    for i in range(num_runs):
+        _, best_f_sa, history = simulated_annealing(initial_temp=10, cooling_rate=0.95, max_iterations=50)
+        sa_results.append(best_f_sa)
+        if i < 5: sa_histories.append(history) # Čuvamo prvih 5 za grafik
+    end_sa = time.time()
+
+    # --- TESTIRANJE GA ---
+    # Izračunavamo broj generacija tako da GA ima isti broj evaluacija kao SA
+    # SA ima ~315 koraka hlađenja * 50 iteracija = 15750 evaluacija
+    # GA sa pop_size=50 treba da ima 15750 / 50 = 315 generacija
+    num_generations_ga = len(sa_histories[0]) 
+    
+    start_ga = time.time()
+    for i in range(num_runs):
+        _, best_f_ga, history = genetic_algorithm(population_size=50, generations=num_generations_ga, mutation_rate=0.1)
+        ga_results.append(best_f_ga)
+        if i < 5: ga_histories.append(history) # Čuvamo prvih 5 za grafik
+    end_ga = time.time()
+
+    # --- VIZUELIZACIJA (Dva grafika jedan pored drugog) ---
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Grafik 1: Boxplot (Statistička značajnost)
+    ax1.boxplot([sa_results, ga_results], labels=['SA', 'GA'])
+    ax1.set_ylabel('Pronađeni minimum f(x)')
+    ax1.set_title('Preciznost i stabilnost (Boxplot)')
+    ax1.grid(True, axis='y', alpha=0.3)
+
+    # Grafik 2: Konvergencija (Intuitivno poređenje)
+    for i in range(5):
+        ax2.plot(sa_histories[i], color='blue', alpha=0.3, label='SA' if i == 0 else "")
+        ax2.plot(ga_histories[i], color='red', alpha=0.3, label='GA' if i == 0 else "")
+    
+    ax2.set_yscale('log')
+    ax2.set_xlabel('Vreme (Korak hlađenja / Generacija)')
+    ax2.set_ylabel('Vrednost f(x) (Log skala)')
+    ax2.set_title('Borba algoritama kroz vreme')
+    ax2.legend()
+    ax2.grid(True, which="both", ls="-", alpha=0.1)
+
+    plt.tight_layout()
+    plt.show()
+
+    # --- STATISTIKA ZA IZVEŠTAJ ---
+    evals_per_run = len(sa_histories[0]) * 50
+    print("-" * 40)
+    print(f"ANALIZA KOMPLEKSNOSTI:")
+    print(f"Broj evaluacija po pokretanju: {evals_per_run}")
+    print(f"Ukupno evaluacija u MC testu: {evals_per_run * num_runs}")
+    print("-" * 40)
+    print(f"REZULTATI (N={num_runs}):")
+    print(f"SA Average: {np.mean(sa_results):.8f} (Std: {np.std(sa_results):.8f})")
+    print(f"GA Average: {np.mean(ga_results):.8f} (Std: {np.std(ga_results):.8f})")
+    print(f"Vreme: SA={end_sa-start_sa:.2f}s, GA={end_ga-start_ga:.2f}s")
+    print("-" * 40)
+
+compare_sa_ga()
 
 # %% Particle Swarm Optimization (PSO) Placeholder
 # Vectorized implementation of PSO for optimization
