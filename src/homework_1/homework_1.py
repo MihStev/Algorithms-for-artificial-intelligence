@@ -1,5 +1,5 @@
 
-# %% Homework 1: Simulated Annealing for Function Optimization
+# %% Homework 1
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -9,7 +9,7 @@ def objective_function(x):
     return (4/3) * term1 + np.abs(x[2])
 
 def simulated_annealing(initial_temp, cooling_rate, max_iterations, step_size=0.1):
-    # Start from a random point in [-1, 1] as per instructions
+    # randomized initial solution within bounds [-1, 1]
     current_x = np.random.uniform(-1, 1, size=3)
     current_f = objective_function(current_x)
     
@@ -18,13 +18,13 @@ def simulated_annealing(initial_temp, cooling_rate, max_iterations, step_size=0.
     
     temp = initial_temp
     
-    # We track the history for the report plots
+    # Tracking history for visualization
     
     history = []
 
     while temp > 1e-6:
         for _ in range(max_iterations):
-            # Neighbor generation: Random walk within bounds
+            # Neighbor generation: add Gaussian noise and clip to bounds
             new_x = current_x + np.random.normal(0, step_size, size=3)
             new_x = np.clip(new_x, -1, 1) 
             
@@ -39,20 +39,20 @@ def simulated_annealing(initial_temp, cooling_rate, max_iterations, step_size=0.
                     best_f = current_f
                     best_x = np.copy(current_x)
         
-        history.append(current_f)
+        history.append(best_f)
         temp *= cooling_rate
         
     return best_x, best_f, history
 
 # %% Monte Carlo Simulation
 num_runs = 100
-results_f = [] # List for storing f values
+results_f = [] 
 
 print(f"Running {num_runs} Monte Carlo simulations...")
 
 for i in range(num_runs):
 
-    best_x, best_f, _ = simulated_annealing(initial_temp=100, cooling_rate=0.95, max_iterations=50)
+    best_x, best_f, _ = simulated_annealing(initial_temp=10, cooling_rate=0.95, max_iterations=50)
     
     results_f.append(best_f)
 
@@ -64,21 +64,21 @@ print(f"Statistics after {num_runs} runs:")
 print(f"Mean of the minimum values: {mean_val:.6f}")
 print(f"Standard deviation: {std_val:.6f}")
 print(f"Best result ever achieved: {np.min(results_f):.6f}")
-# %%
-# %% Visualization and Analysis
 
-# 1. Graphic representation of the convergence (Dokaz za izveštaj)
+# %% Visualization of SA results and Monte Carlo distribution
+
+# 1. Convergence of SA (alpha=0.95, N=50 iterations)
 best_x, best_f, history = simulated_annealing(initial_temp=10, cooling_rate=0.95, max_iterations=50)
 
 plt.figure(figsize=(10, 5))
 plt.plot(history, color='blue', lw=1.5)
 plt.title('Convergence of Simulated Annealing (alpha=0.95)')
-plt.xlabel('Temperature Step (Cooling Iteration)')
-plt.ylabel('Current f(x)')
+plt.xlabel('Temperature step (Cooling Iteration)')
+plt.ylabel('Current value f(x)')
 plt.grid(True, alpha=0.3)
 plt.show()
 
-# 2. Comaprison of cooling schedules (Dokaz za izveštaj)
+# 2. Comparison of cooling rates (alpha) in SA convergence 
 # Testing: Superfast (0.5), Good (0.95) and Slow (0.999)
 rates = [0.5, 0.95, 0.999]
 plt.figure(figsize=(12, 6))
@@ -88,40 +88,40 @@ for r in rates:
     plt.plot(h, label=f'Cooling rate (alpha) = {r}')
 
 plt.yscale('log') 
-plt.title('Comparison of Cooling Schedules')
+plt.title('Comparison of Cooling Rates in Simulated Annealing')
 plt.xlabel('Iteration')
 plt.ylabel('f(x) value (Log scale)')
 plt.legend()
 plt.grid(True, which="both", ls="-", alpha=0.2)
 plt.show()
 
-# 3. Histogram Monte Carlo results (Dokaz za izveštaj)
+# 3. Histogram Monte Carlo results 
 plt.figure(figsize=(10, 5))
 plt.hist(results_f, bins=20, color='green', edgecolor='black', alpha=0.7)
 plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {mean_val:.4f}')
-plt.title(f'Distribution of Minimums over {num_runs} Monte Carlo Runs')
-plt.xlabel('Found Minimum f(x)')
+plt.title(f'Distribution of minimum over {num_runs} Monte Carlo simulations')
+plt.xlabel('Found minimum value f(x)')
 plt.ylabel('Frequency')
 plt.legend()
 plt.show()
 
-# %% Genetic Algorithm Implementation
+# %% Genetski algoritam
 
 def genetic_algorithm(population_size, generations, mutation_rate, tournament_size=3):
-    # Inicijalizacija
+    # Inicijalization
     population = np.random.uniform(-1, 1, (population_size, 3))
     
-    # Elitism: tracking the best ever found solution
+    # Elitism - saving the best solution found so far
     best_ind = None
     best_fit = float('inf')
     
-    # For the plot: tracking average fitness across generations
+    
     avg_fitness_history = []
 
     for gen in range(generations):
         fitness = np.array([objective_function(ind) for ind in population])
         
-        # Update najboljeg (Elitizam)
+        # Update best (Elitism)
         current_min_idx = np.argmin(fitness)
         if fitness[current_min_idx] < best_fit:
             best_fit = fitness[current_min_idx]
@@ -129,22 +129,22 @@ def genetic_algorithm(population_size, generations, mutation_rate, tournament_si
             
         avg_fitness_history.append(np.mean(fitness))
 
-        # 1. SELEKCIJA (Tournament)
+        # 1. SELECTION (Tournament)
         new_population = []
         for _ in range(population_size):
-            # Izaberemo nasumičnih k jedinki
+            # Choose random candidates for the tournament
             candidates_idx = np.random.choice(population_size, tournament_size)
-            # Pobednik je onaj sa najmanjim fitnessom
+            # Winner is the one with the best fitness (lowest f(x))
             winner_idx = candidates_idx[np.argmin(fitness[candidates_idx])]
             new_population.append(population[winner_idx])
         
         new_population = np.array(new_population)
 
-        # 2. UKRŠTANJE (Aritmetičko - bolje za realne brojeve)
+        # 2. CROSSOVER (Arithmetic)
         offspring = []
         for i in range(0, population_size, 2):
             p1 = new_population[i]
-            # Handle neparan broj populacije
+            # Handle even/odd population size by wrapping around
             p2 = new_population[i+1] if (i+1) < population_size else new_population[0]
             
             alpha = np.random.rand()
@@ -153,27 +153,27 @@ def genetic_algorithm(population_size, generations, mutation_rate, tournament_si
             offspring.append(child1)
             offspring.append(child2)
             
-        # Skrati ako je dodat jedan višak zbog neparnog broja
+        # Shorten offspring to population size (in case of odd population)
         offspring = np.array(offspring[:population_size])
 
-        # 3. MUTACIJA
+        # 3. MUTATION
         for i in range(population_size):
             if np.random.rand() < mutation_rate:
                 # Dodajemo Gausov šum
                 offspring[i] += np.random.normal(0, 0.1, size=3)
                 offspring[i] = np.clip(offspring[i], -1, 1)
 
-        # Ubaci najboljeg iz prethodne generacije (Elitizam) nazad na slučajno mesto
+        # Insert elitism
         population = offspring
         population[np.random.randint(population_size)] = best_ind
 
     return best_ind, best_fit, avg_fitness_history
 
-# %% Monte Carlo za Genetski Algoritam (Traženi grafici)
+# %% Monte Carlo simulation for GA
 
 
 def run_mc_ga():
-    # Parametri za testiranje efikasnosti
+    # Parametres for GA Monte Carlo simulation
     pop_sizes = [10, 20, 50, 100]
     gens = 100
     num_mc = 20
@@ -191,115 +191,33 @@ def run_mc_ga():
         results.append(np.mean(current_pop_results))
         complexities.append(pop * gens) # Broj računskih operacija
 
-    # GRAFIK 1: Računarska efikasnost (Traženo u tekstu zadatka)
+    # GRAPH 1: Efficiency of GA (Operations vs. Quality of Solution)
     plt.figure(figsize=(10, 5))
-    plt.plot(complexities, results, 'o-', color='red', label='Average Best Fitness')
-    plt.xlabel('Number of Computational Operations (Pop_size * Gen)')
-    plt.ylabel('Average Fitness (min f(x))')
-    plt.title('Efficiency of the Genetic Algorithm')
+    plt.plot(complexities, results, 'o-', color='red', label='Average f(x) after GA')
+    plt.xlabel('Number of Operations (Population * Generations)')
+    plt.ylabel('Average value of f(x) (min f(x))')
+    plt.title('Efficiency of GA: Operations vs. Quality of Solution')
     plt.grid(True)
     plt.legend()
     plt.show()
 
-    # GRAFIK 2: Uticaj verovatnoće mutacije
+    # GRAPH 2: Impact of mutation rate on convergence (N=20 MC runs, pop_size=50, gens=100)
     mutations = [0.01, 0.1, 0.5]
     plt.figure(figsize=(10, 5))
     for m in mutations:
         _, _, history = genetic_algorithm(50, 100, m)
-        plt.plot(history, label=f'Mutation Rate = {m}')
+        plt.plot(history, label=f'Mutation rate= {m}')
     
-    plt.xlabel('Generation')
-    plt.ylabel('Average Fitness of Population')
-    plt.title('Impact of Mutation Rate on Convergence')
+    plt.xlabel('Generations')
+    plt.ylabel('Average value of f(x) (min f(x))')
+    plt.title('Impact of Mutation Rate on GA Convergence')
     plt.legend()
     plt.show()
 
 run_mc_ga()
 
-# %% Comparison of Simulated Annealing and Genetic Algorithm
-# %% [markdown]
-# Radi fer poređenja algoritama na statistički značajan način, parametri su podešeni tako da oba algoritma vrše približno isti broj evaluacija funkcije cilja (
-# N\approx15.750
-# ). Za Simulirano kaljenje, pri hlađenju sa T=10 na T={10}^{-6} uz faktor \alpha=0.95,
-# algoritam izvršava oko 315 koraka hlađenja sa po 50 unutrašnjih iteracija. 
-# Da bi se postigla ista kompleksnost, Genetski algoritam je konfigurisan sa populacijom od 50 jedinki
-# kroz 315 generacija. Na ovaj način, razlika u kvalitetu rešenja potiče isključivo od efikasnosti
-# same strategije pretrage, a ne od količine uloženih računarskih resursa.
-
-#%%
-def compare_sa_ga(num_runs=50):
-    sa_results = []
-    ga_results = []
-    
-    # Za intuitivni grafik konvergencije uzećemo po 5 reprezentativnih pokretanja
-    sa_histories = []
-    ga_histories = []
-
-    print(f"Pokrećem poređenje: {num_runs} MC simulacija po algoritmu...")
-
-    # --- TESTIRANJE SA ---
-    start_sa = time.time()
-    for i in range(num_runs):
-        _, best_f_sa, history = simulated_annealing(initial_temp=10, cooling_rate=0.95, max_iterations=50)
-        sa_results.append(best_f_sa)
-        if i < 5: sa_histories.append(history) # Čuvamo prvih 5 za grafik
-    end_sa = time.time()
-
-    # --- TESTIRANJE GA ---
-    # Izračunavamo broj generacija tako da GA ima isti broj evaluacija kao SA
-    # SA ima ~315 koraka hlađenja * 50 iteracija = 15750 evaluacija
-    # GA sa pop_size=50 treba da ima 15750 / 50 = 315 generacija
-    num_generations_ga = len(sa_histories[0]) 
-    
-    start_ga = time.time()
-    for i in range(num_runs):
-        _, best_f_ga, history = genetic_algorithm(population_size=50, generations=num_generations_ga, mutation_rate=0.1)
-        ga_results.append(best_f_ga)
-        if i < 5: ga_histories.append(history) # Čuvamo prvih 5 za grafik
-    end_ga = time.time()
-
-    # --- VIZUELIZACIJA (Dva grafika jedan pored drugog) ---
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-
-    # Grafik 1: Boxplot (Statistička značajnost)
-    ax1.boxplot([sa_results, ga_results], labels=['SA', 'GA'])
-    ax1.set_ylabel('Pronađeni minimum f(x)')
-    ax1.set_title('Preciznost i stabilnost (Boxplot)')
-    ax1.grid(True, axis='y', alpha=0.3)
-
-    # Grafik 2: Konvergencija (Intuitivno poređenje)
-    for i in range(5):
-        ax2.plot(sa_histories[i], color='blue', alpha=0.3, label='SA' if i == 0 else "")
-        ax2.plot(ga_histories[i], color='red', alpha=0.3, label='GA' if i == 0 else "")
-    
-    ax2.set_yscale('log')
-    ax2.set_xlabel('Vreme (Korak hlađenja / Generacija)')
-    ax2.set_ylabel('Vrednost f(x) (Log skala)')
-    ax2.set_title('Borba algoritama kroz vreme')
-    ax2.legend()
-    ax2.grid(True, which="both", ls="-", alpha=0.1)
-
-    plt.tight_layout()
-    plt.show()
-
-    # --- STATISTIKA ZA IZVEŠTAJ ---
-    evals_per_run = len(sa_histories[0]) * 50
-    print("-" * 40)
-    print(f"ANALIZA KOMPLEKSNOSTI:")
-    print(f"Broj evaluacija po pokretanju: {evals_per_run}")
-    print(f"Ukupno evaluacija u MC testu: {evals_per_run * num_runs}")
-    print("-" * 40)
-    print(f"REZULTATI (N={num_runs}):")
-    print(f"SA Average: {np.mean(sa_results):.8f} (Std: {np.std(sa_results):.8f})")
-    print(f"GA Average: {np.mean(ga_results):.8f} (Std: {np.std(ga_results):.8f})")
-    print(f"Vreme: SA={end_sa-start_sa:.2f}s, GA={end_ga-start_ga:.2f}s")
-    print("-" * 40)
-
-compare_sa_ga()
-
-# %% Particle Swarm Optimization (PSO) Placeholder
-# Vectorized implementation of PSO for optimization
-# instead of for loops
+# %% Particle Swarm Optimization (PSO) 
+# Vektorized PSO implementation for efficiency and clarity
 
 def pso(num_particles=30, iterations=100, n_dims=3, w=0.7, v_max=0.2):
     particles  = np.random.uniform(-1, 1, (num_particles, n_dims))
@@ -336,8 +254,8 @@ def pso(num_particles=30, iterations=100, n_dims=3, w=0.7, v_max=0.2):
             gbest_pos     = np.copy(pbest_pos[best_idx])
         history.append(gbest_fitness)
     return gbest_pos, gbest_fitness, history
-# %% Visualization of PSO convergence
-# Sanity check
+# %% Visualization of PSO results and Monte Carlo distribution
+
 print("=== Sanity check ===")
 print(f"f([0,0,0])   = {objective_function([0,0,0]):.6f}  (expected: 0.000000)")
 print(f"f([1,1,1])   = {objective_function([1,1,1]):.6f}  (expected: 2.333333)")
@@ -345,18 +263,18 @@ print(f"f([-1,-1,0]) = {objective_function([-1,-1,0]):.6f}  (expected: 1.333333)
 print()
  
  
-# Monte Carlo simulation of PSO (N=50 iterations)
+# Monte Carlo simulation of PSO algorithm (N=50 iterations)
 N_MC = 50
 results = [pso(num_particles=30, iterations=100) for _ in range(N_MC)]
 fitnesses = [r[1] for r in results]
 best_run  = results[np.argmin(fitnesses)]
  
 print("=== Monte Carlo results (N=50, 30 particles, 100 iterations) ===")
-print(f"Average f value : {np.mean(fitnesses):.6f}")
-print(f"Standard deviation      : {np.std(fitnesses):.6f}")
+print(f"Average f values: {np.mean(fitnesses):.6f}")
+print(f"Stdandard deviation of f values     : {np.std(fitnesses):.6f}")
 print(f"Minimum f               : {np.min(fitnesses):.6f}")
 print(f"Maximum f               : {np.max(fitnesses):.6f}")
-print(f"Best position   : {np.round(best_run[0], 5)}")
+print(f"Best f value  : {np.round(best_run[0], 5)}")
 print()
  
 # GRAPH 1 - Convergence of PSO (N=50 Monte Carlo runs)
@@ -366,20 +284,20 @@ std_hist  = histories.std(axis=0)
 iters     = np.arange(len(mean_hist))
  
 fig, ax = plt.subplots(figsize=(8, 4))
-ax.plot(iters, mean_hist, color="#1f77b4", linewidth=2, label="Average gbest")
+ax.plot(iters, mean_hist, color="#1f77b4", linewidth=2, label="Average values of f(gbest)")
 ax.fill_between(iters,
                 mean_hist - std_hist,
                 mean_hist + std_hist,
                 alpha=0.2, color="#1f77b4", label="±1 std")
 ax.set_xlabel("Iteration")
 ax.set_ylabel("f(gbest)")
-ax.set_title("Convergence of PSO (N=50 Monte Carlo runs)")
+ax.set_title("Convergence of PSO (N=50 Monte Carlo simulations)")
 ax.legend()
 plt.tight_layout()
 plt.show()
  
  
-# GRAPH 2 — Impact of Particle Count
+# GRAPH 2 — Impact of number of particles on PSO performance (N=30 Monte Carlo runs, 100 iterations)
 particle_counts = [5, 10, 20, 30, 50, 100]
 N_MC2 = 30
  
@@ -392,12 +310,98 @@ for np_ in particle_counts:
 mean_fits = np.array(mean_fits)
 std_fits  = np.array(std_fits)
  
-fig, ax = plt.subplots(figsize=(7, 4))
+fig, ax = plt.subplots(figsize=(8, 4))
 ax.errorbar(particle_counts, mean_fits, yerr=std_fits,
             fmt="o-", color="#2ca02c", capsize=5, linewidth=2, markersize=6)
-ax.set_xlabel("Number of Particles (N)")
-ax.set_ylabel("Average f value")
-ax.set_title("Impact of Particle Count (N=30 MC, 100 iterations)")
+ax.set_xlabel("Number of particles(N)")
+ax.set_ylabel("Average value f(x)")
+ax.set_title("Impact of number of particles on PSO performance(N=30 MC, 100 iteracija)")
 plt.tight_layout()
 plt.show()
             
+
+# %% Comparison of SA, GA and PSO (N=50 Monte Carlo runs each)
+
+def compare_sa_ga_pso(num_runs=50):
+    sa_results = []
+    ga_results = []
+    pso_results = []
+    
+
+    sa_histories = []
+    ga_histories = []
+    pso_histories = []
+
+    print(f"Pokrećem poređenje: {num_runs} MC simulacija po algoritmu...")
+
+    # TESTING SA
+    start_sa = time.time()
+    for i in range(num_runs):
+        _, best_f_sa, history = simulated_annealing(initial_temp=10, cooling_rate=0.95, max_iterations=50)
+        sa_results.append(best_f_sa)
+        if i < 5: sa_histories.append(history) # Saving first 5 for graph
+    end_sa = time.time()
+
+    # TESTING GA
+    # Aligning GA evaluations with SA:
+
+    # SA: ~315 cooling steps * 50 iterations = 15,750 evals
+    # GA: pop_size=50 implies 15,750 / 50 = 315 generations
+    num_generations_ga = len(sa_histories[0]) 
+    
+    start_ga = time.time()
+    for i in range(num_runs):
+        _, best_f_ga, history = genetic_algorithm(population_size=50, generations=num_generations_ga, mutation_rate=0.1)
+        ga_results.append(best_f_ga)
+        if i < 5: ga_histories.append(history) # Saving first 5 for graph
+    end_ga = time.time()
+
+    # TESTING PSO
+    # 15750 / 30 (number of particles) = 525 iterations
+    start_pso = time.time()
+    for i in range(num_runs):
+        _, best_f_pso, history = pso(num_particles=30, iterations=525)
+        pso_results.append(best_f_pso)
+        if i < 5: pso_histories.append(history) # Saving first 5 for graph
+    end_pso = time.time()
+    
+
+    # VISUALIZATION: Boxplot + Convergence Graphs
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Grafh 1: Boxplot 
+    ax1.boxplot([sa_results, ga_results, pso_results], labels=['SA', 'GA', 'PSO'])
+    ax1.set_ylabel('Pronađeni minimum f(x)')
+    ax1.set_title('Preciznost i stabilnost (Boxplot)')
+    ax1.grid(True, axis='y', alpha=0.3)
+
+    # Graph 2: Convergence
+    for i in range(5):
+        ax2.plot(sa_histories[i], color='blue', alpha=0.3, label='SA' if i == 0 else "")
+        ax2.plot(ga_histories[i], color='red', alpha=0.3, label='GA' if i == 0 else "")
+        ax2.plot(pso_histories[i], color='green', alpha=0.3, label='PSO' if i == 0 else "")
+    ax2.set_yscale('log')
+    ax2.set_xlabel('Time (Step of cooling / Generations / Iterations)')
+    ax2.set_ylabel('Values f(x) (Log scale)')
+    ax2.set_title('Convergence of SA, GA and PSO (First 5 runs)')
+    ax2.legend()
+    ax2.grid(True, which="both", ls="-", alpha=0.1)
+
+    plt.tight_layout()
+    plt.show()
+
+    
+    evals_per_run = len(sa_histories[0]) * 50
+    print("-" * 40)
+    print(f"Analysis of {num_runs} Monte Carlo runs:")
+    print(f"Number of evaluations per run: {evals_per_run}")
+    print(f"Total number of evaluations in MC test: {evals_per_run * num_runs}")
+    print("-" * 40)
+    print(f"Results (N={num_runs}):")
+    print(f"SA Average value: {np.mean(sa_results):.4f} (Std: {np.std(sa_results):.4f})")
+    print(f"GA Average value: {np.mean(ga_results):.4f} (Std: {np.std(ga_results):.4f})")
+    print(f"PSO Average value: {np.mean(pso_results):.4f} (Std: {np.std(pso_results):.4f})")
+    print(f"Time taken: SA={end_sa-start_sa:.2f}s, GA={end_ga-start_ga:.2f}s, PSO={end_pso-start_pso:.2f}s")
+    print("-" * 40)
+
+compare_sa_ga_pso()
