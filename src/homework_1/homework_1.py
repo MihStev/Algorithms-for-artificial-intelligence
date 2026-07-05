@@ -105,10 +105,10 @@ plt.ylabel('Frequency')
 plt.legend()
 plt.show()
 
-# %% Genetski algoritam
+# %% Genetic Algorithm
 
 def genetic_algorithm(population_size, generations, mutation_rate, tournament_size=3):
-    # Inicijalization
+    # Initialization
     population = np.random.uniform(-1, 1, (population_size, 3))
     
     # Elitism - saving the best solution found so far
@@ -159,7 +159,7 @@ def genetic_algorithm(population_size, generations, mutation_rate, tournament_si
         # 3. MUTATION
         for i in range(population_size):
             if np.random.rand() < mutation_rate:
-                # Dodajemo Gausov šum
+                # Add Gaussian noise
                 offspring[i] += np.random.normal(0, 0.1, size=3)
                 offspring[i] = np.clip(offspring[i], -1, 1)
 
@@ -173,7 +173,7 @@ def genetic_algorithm(population_size, generations, mutation_rate, tournament_si
 
 
 def run_mc_ga():
-    # Parametres for GA Monte Carlo simulation
+    # Parameters for GA Monte Carlo simulation
     pop_sizes = [10, 20, 50, 100]
     gens = 100
     num_mc = 20
@@ -189,7 +189,7 @@ def run_mc_ga():
             current_pop_results.append(b_fit)
         
         results.append(np.mean(current_pop_results))
-        complexities.append(pop * gens) # Broj računskih operacija
+        complexities.append(pop * gens) # Number of computational operations
 
     # GRAPH 1: Efficiency of GA (Operations vs. Quality of Solution)
     plt.figure(figsize=(10, 5))
@@ -315,7 +315,7 @@ ax.errorbar(particle_counts, mean_fits, yerr=std_fits,
             fmt="o-", color="#2ca02c", capsize=5, linewidth=2, markersize=6)
 ax.set_xlabel("Number of particles(N)")
 ax.set_ylabel("Average value f(x)")
-ax.set_title("Impact of number of particles on PSO performance(N=30 MC, 100 iteracija)")
+ax.set_title("Impact of number of particles on PSO performance (N=30 MC, 100 iterations)")
 plt.tight_layout()
 plt.show()
             
@@ -332,7 +332,7 @@ def compare_sa_ga_pso(num_runs=50):
     ga_histories = []
     pso_histories = []
 
-    print(f"Pokrećem poređenje: {num_runs} MC simulacija po algoritmu...")
+    print(f"Running comparison: {num_runs} MC simulations per algorithm...")
 
     # TESTING SA
     start_sa = time.time()
@@ -371,8 +371,8 @@ def compare_sa_ga_pso(num_runs=50):
 
     # Grafh 1: Boxplot 
     ax1.boxplot([sa_results, ga_results, pso_results], labels=['SA', 'GA', 'PSO'])
-    ax1.set_ylabel('Pronađeni minimum f(x)')
-    ax1.set_title('Preciznost i stabilnost (Boxplot)')
+    ax1.set_ylabel('Best minimum found f(x)')
+    ax1.set_title('Precision and stability (Boxplot)')
     ax1.grid(True, axis='y', alpha=0.3)
 
     # Graph 2: Convergence

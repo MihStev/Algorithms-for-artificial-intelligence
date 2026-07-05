@@ -10,45 +10,46 @@ import numpy as np
 sys.stdout.reconfigure(encoding='utf-8')
 
 # =============================================================================
-# DEO 1 — Okruženje i Simulator
+# PART 1 — Environment and Simulator
 # =============================================================================
 
 STATES       = [f'A{i}' for i in range(1, 6)] + [f'B{i}' for i in range(1, 6)]
 NON_TERMINAL = ['A1', 'A2', 'A3', 'A4', 'A5', 'B2', 'B4']
 TERMINAL     = ['B1', 'B3', 'B5']
-ACTIONS      = ['gore', 'dole', 'levo', 'desno']
+ACTIONS      = ['up', 'down', 'left', 'right']
 GAMMA        = 0.9
 MAX_STEPS    = 200
 
 
-def move(s, smer):
-    """Deterministički pomeraj iz stanja s u smeru smer; udarac u zid → isto stanje."""
+def move(s, direction):
+    """Deterministic move from state s in the given direction; hitting a wall -> same state."""
     row, col = s[0], int(s[1])
-    if smer == 'gore':
+    if direction == 'up':
         return s if row == 'A' else f'A{col}'
-    if smer == 'dole':
+    if direction == 'down':
         return s if row == 'B' else f'B{col}'
-    if smer == 'levo':
+    if direction == 'left':
         return s if col == 1 else f'{row}{col - 1}'
-    # desno
+    # right
     return s if col == 5 else f'{row}{col + 1}'
 
 
 def transition_dist(s, a):
     """
-    P(s'|s,a): nameravani smer 0.6, svaki od 3 preostala smera 0.1, ostani 0.1.
-    Udarci u zid se stapaju u s (defaultdict ih automatski sabira).
+    P(s'|s,a): the intended direction gets 0.6, each of the 3 remaining
+    directions gets 0.1, staying in place gets 0.1.
+    Wall bumps merge back into s (defaultdict sums them automatically).
     """
     P = defaultdict(float)
-    for smer in ACTIONS:
-        p = 0.6 if smer == a else 0.1
-        P[move(s, smer)] += p
-    P[s] += 0.1   # ishod "ostani u mestu"
+    for direction in ACTIONS:
+        p = 0.6 if direction == a else 0.1
+        P[move(s, direction)] += p
+    P[s] += 0.1   # "stay in place" outcome
     return dict(P)
 
 
 def reward(s_next):
-    """R(s'): +1.0 za B3, -1.0 za B1/B5, -0.04 za sva ostala stanja."""
+    """R(s'): +1.0 for B3, -1.0 for B1/B5, -0.04 for every other state."""
     if s_next == 'B3':
         return 1.0
     if s_next in ('B1', 'B5'):
@@ -63,12 +64,12 @@ def _sample_from(P):
 
 class Simulator:
     def reset(self):
-        """Uniformno bira jedno od 7 neterminalnih stanja."""
+        """Uniformly picks one of the 7 non-terminal states."""
         self.s = random.choice(NON_TERMINAL)
         return self.s
 
     def step(self, a):
-        """Primeni akciju a; vrati (nagrada, novo_stanje, done)."""
+        """Apply action a; return (reward, new_state, done)."""
         P      = transition_dist(self.s, a)
         s_next = _sample_from(P)
         r      = reward(s_next)
@@ -77,25 +78,25 @@ class Simulator:
         return r, s_next, done
 
     def model(self, s, a):
-        """Sme da koristi SAMO iteracija Q-vrednosti (deo 2)."""
+        """May be used ONLY by Q-value iteration (part 2)."""
         return transition_dist(s, a)
 
 
 # =============================================================================
-# DEO 2 — Iteracija Q-vrednosti (etalon)
+# PART 2 — Q-value iteration (benchmark)
 # =============================================================================
 
 def _argmax_a(Q, s):
-    """argmax_a Q(s,a) sa nasumičnim razbijanjem izjednačenja."""
+    """argmax_a Q(s,a) with random tie-breaking."""
     best = max(Q[(s, a)] for a in ACTIONS)
     return random.choice([a for a in ACTIONS if Q[(s, a)] == best])
 
 
 def q_value_iteration(gamma=GAMMA, tol=1e-12):
     """
-    Sinhrona iteracija Q-vrednosti nad poznatim modelom.
-    Vraća: Q, V_star, pi_star, V_hist (lista snimaka V po iteraciji).
-    Sme da koristi transition_dist (poznat model) — SAMO ovaj deo!
+    Synchronous Q-value iteration over the known model.
+    Returns: Q, V_star, pi_star, V_hist (list of V snapshots per iteration).
+    May use transition_dist (known model) — ONLY this part is allowed to!
     """
     Q      = {(s, a): 0.0 for s in NON_TERMINAL for a in ACTIONS}
     V_hist = []
@@ -125,11 +126,11 @@ def q_value_iteration(gamma=GAMMA, tol=1e-12):
 
 
 # =============================================================================
-# DEO 3 — Q-učenje (model-free, TD, ε-gramzivo)
+# PART 3 — Q-learning (model-free, TD, epsilon-greedy)
 # =============================================================================
 
 def _epsilon_greedy(Q, s, eps):
-    """ε-gramziva selekcija akcije; nasumično razbijanje izjednačenja."""
+    """Epsilon-greedy action selection; random tie-breaking."""
     if random.random() < eps:
         return random.choice(ACTIONS)
     best = max(Q[(s, a)] for a in ACTIONS)
@@ -138,10 +139,10 @@ def _epsilon_greedy(Q, s, eps):
 
 def q_learning(sim, n_ep, gamma=GAMMA, eps=0.1, alpha_fn=None, snapshot_every=50):
     """
-    Q-učenje sa ε-gramzivim istraživanjem.
-    alpha_fn(e) -> stopa učenja za epizodu e.
-    Vraća: Q, V_snaps (lista {s: V_t} svakih snapshot_every ep.), ep_rewards.
-    NE sme da koristi sim.model() — samo reset() i step().
+    Q-learning with epsilon-greedy exploration.
+    alpha_fn(e) -> learning rate for episode e.
+    Returns: Q, V_snaps (list of {s: V_t} every snapshot_every ep.), ep_rewards.
+    Must NOT use sim.model() — only reset() and step().
     """
     if alpha_fn is None:
         def alpha_fn(e):
@@ -173,8 +174,8 @@ def q_learning(sim, n_ep, gamma=GAMMA, eps=0.1, alpha_fn=None, snapshot_every=50
 
 
 def test_policy(sim, Q, n_test=10):
-    """Proceni naučenu politiku: n_test epizoda, ε=0, bez TD ažuriranja.
-    Vraća prosek kumulativne sirove nagrade G po epizodi."""
+    """Evaluate the learned policy: n_test episodes, eps=0, no TD updates.
+    Returns the average cumulative raw reward per episode."""
     total = 0.0
     for _ in range(n_test):
         s     = sim.reset()
@@ -191,11 +192,11 @@ def test_policy(sim, Q, n_test=10):
 
 
 # =============================================================================
-# DEO 4 — REINFORCE (gradijent politike, softmaks parametrizacija)
+# PART 4 — REINFORCE (policy gradient, softmax parametrization)
 # =============================================================================
 
 def _softmax(logits):
-    """Numerički stabilan softmaks: oduzima max da spreči overflow."""
+    """Numerically stable softmax: subtracts the max to prevent overflow."""
     m    = max(logits)
     exps = [math.exp(x - m) for x in logits]
     s    = sum(exps)
@@ -204,11 +205,11 @@ def _softmax(logits):
 
 def reinforce(sim, n_ep, gamma=GAMMA, alpha_fn=None, snapshot_every=200):
     """
-    REINFORCE sa softmaks politikom.
-    Parametrizacija: θ[s,a] za svako neterminalno s i akciju a (7×4 = 28 param.).
-    π_θ(a|s) = softmax_a(θ[s,·])
-    Ažuriranje: θ[s,a'] += α · v_τ · (𝟙[a'=a] − π(a'|s))  ∀a'
-    NE sme da koristi sim.model() — samo reset() i step().
+    REINFORCE with a softmax policy.
+    Parametrization: theta[s,a] for every non-terminal s and action a (7x4 = 28 params).
+    pi_theta(a|s) = softmax_a(theta[s,.])
+    Update: theta[s,a'] += alpha . v_tau . (1[a'=a] - pi(a'|s))  for all a'
+    Must NOT use sim.model() — only reset() and step().
     """
     if alpha_fn is None:
         def alpha_fn(e):
@@ -219,7 +220,7 @@ def reinforce(sim, n_ep, gamma=GAMMA, alpha_fn=None, snapshot_every=200):
     theta_hist = []
 
     for e in range(1, n_ep + 1):
-        # --- 1) Generiši epizodu prateći trenutnu politiku ---
+        # --- 1) Generate an episode following the current policy ---
         traj  = []
         s     = sim.reset()
         done  = False
@@ -232,19 +233,19 @@ def reinforce(sim, n_ep, gamma=GAMMA, alpha_fn=None, snapshot_every=200):
             traj.append((s, a, r))
             s, steps = s2, steps + 1
 
-        # --- 2) Return-to-go unazad: v_τ = r_τ + γ·v_{τ+1} ---
+        # --- 2) Return-to-go, computed backwards: v_tau = r_tau + gamma*v_{tau+1} ---
         returns = [0.0] * len(traj)
         v       = 0.0
         for t in reversed(range(len(traj))):
             v          = traj[t][2] + gamma * v
             returns[t] = v
 
-        # --- 3) Ažuriranje parametara ---
+        # --- 3) Parameter update ---
         alpha = alpha_fn(e)
         for t, (st, at, _) in enumerate(traj):
             probs = _softmax([theta[(st, a)] for a in ACTIONS])
             for j, aj in enumerate(ACTIONS):
-                # skor funkcija: ∂/∂θ[st,aj] ln π = 𝟙[aj=at] − π(aj|st)
+                # Score function: d/d theta[st,aj] ln pi = 1[aj=at] - pi(aj|st)
                 grad = (1.0 if aj == at else 0.0) - probs[j]
                 theta[(st, aj)] += alpha * returns[t] * grad
 
@@ -256,7 +257,7 @@ def reinforce(sim, n_ep, gamma=GAMMA, alpha_fn=None, snapshot_every=200):
 
 
 def _policy_from_theta(theta):
-    """Greedy politika iz θ: argmax_a π_θ(a|s) za svako neterminalno s."""
+    """Greedy policy from theta: argmax_a pi_theta(a|s) for every non-terminal s."""
     pi = {}
     for s in NON_TERMINAL:
         probs = _softmax([theta[(s, a)] for a in ACTIONS])
@@ -265,12 +266,12 @@ def _policy_from_theta(theta):
 
 
 # =============================================================================
-# GRAFICI (G1–G11)
+# PLOTS (G1-G11)
 # =============================================================================
 
 _OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plots')
 
-# Globalni stil — serif font, bez gornjih/desnih osa, tačkasti grid
+# Global style — serif font, no top/right spines, dotted grid
 plt.rcParams.update({
     'font.family':        'DejaVu Serif',
     'axes.titlesize':     11,
@@ -288,13 +289,13 @@ plt.rcParams.update({
     'axes.facecolor':     '#f8f8f8',
 })
 
-# Paleta za linije (8 boja, perceptualno razdvojene, tamnije od tab10)
+# Line palette (8 colors, perceptually separated, darker than tab10)
 _PAL8 = ['#1b4f72', '#c0392b', '#1e8449', '#884ea0',
           '#d68910', '#148f77', '#7f8c8d', '#2e86c1']
 
-# Boje po akciji za G8 — teal/crvena/zelena/ljubičasta
-_ACT_CLR = {'gore': '#1a6b8a', 'dole': '#c0392b',
-             'levo': '#27ae60', 'desno': '#8e44ad'}
+# Colors per action for G8 — teal/red/green/purple
+_ACT_CLR = {'up': '#1a6b8a', 'down': '#c0392b',
+             'left': '#27ae60', 'right': '#8e44ad'}
 
 
 def _ensure_out():
@@ -302,10 +303,10 @@ def _ensure_out():
 
 
 def _draw_grid(ax, V, pi, title, v_min=-1.0, v_max=1.0):
-    """2×5 mreza: boja = V vrednost (RdBu_r), simbol = politika."""
-    arrows = {'gore': '↑', 'dole': '↓', 'levo': '←', 'desno': '→'}
+    """2x5 grid: color = V value (RdBu_r), symbol = policy."""
+    arrows = {'up': '↑', 'down': '↓', 'left': '←', 'right': '→'}
     term_v = {'B1': -1.0, 'B3': +1.0, 'B5': -1.0}
-    cmap   = plt.cm.RdBu_r   # crvena=-1, bela=0, plava=+1
+    cmap   = plt.cm.RdBu_r   # red=-1, white=0, blue=+1
 
     for ri, row in enumerate(['A', 'B']):
         for ci in range(5):
@@ -314,15 +315,15 @@ def _draw_grid(ax, V, pi, title, v_min=-1.0, v_max=1.0):
             val = term_v.get(s, V.get(s, 0.0))
             norm = np.clip((val - v_min) / (v_max - v_min), 0.0, 1.0)
             clr  = cmap(norm)
-            # tekst crn na svetlim ćelijama, bel na tamnim
+            # text black on light cells, white on dark cells
             txt_clr = 'white' if (norm < 0.25 or norm > 0.75) else '#1a1a1a'
 
             ax.add_patch(plt.Rectangle((ci, y), 1, 1,
                                        facecolor=clr, edgecolor='#555', lw=1.2))
-            # ime stanja — mali tag u gornjem levom uglu
+            # state name — small tag in the top-left corner
             ax.text(ci + 0.08, y + 0.88, s,
                     ha='left', va='top', fontsize=7, color=txt_clr, alpha=0.7)
-            # vrednost u sredini
+            # value in the center
             ax.text(ci + 0.5, y + 0.60, f'{val:+.3f}',
                     ha='center', va='center', fontsize=9,
                     fontweight='bold', color=txt_clr)
@@ -339,9 +340,9 @@ def _draw_grid(ax, V, pi, title, v_min=-1.0, v_max=1.0):
     ax.set_xticks([i + 0.5 for i in range(5)])
     ax.set_xticklabels([f'col{i + 1}' for i in range(5)], fontsize=8)
     ax.set_yticks([0.5, 1.5])
-    ax.set_yticklabels(['red B', 'red A'], fontsize=8)
+    ax.set_yticklabels(['row B', 'row A'], fontsize=8)
     ax.set_title(title, fontsize=10, fontweight='bold', pad=8)
-    ax.set_facecolor('white')   # grid ćelije na beloj pozadini
+    ax.set_facecolor('white')   # grid cells on white background
 
 
 def _rolling_mean(arr, window):
@@ -349,7 +350,7 @@ def _rolling_mean(arr, window):
 
 
 def _ql_error_curve(V_star, n_seeds, n_ep, gamma, eps, alpha_fn, snap_every):
-    """Vrati niz [n_seeds x n_snaps] max-norm gresaka ||V_t - V*||∞."""
+    """Return an [n_seeds x n_snaps] array of max-norm errors ||V_t - V*||inf."""
     sim     = Simulator()
     n_snaps = n_ep // snap_every
     errs    = np.zeros((n_seeds, n_snaps))
@@ -361,24 +362,24 @@ def _ql_error_curve(V_star, n_seeds, n_ep, gamma, eps, alpha_fn, snap_every):
     return errs
 
 
-# ── G1 ────────────────────────────────────────────────────────────────────────
+# -- G1 ------------------------------------------------------------------------
 
 def make_g1(V_star, pi_star):
-    """G1: V* heatmap + strelice politike na 2x5 mrezi."""
+    """G1: V* heatmap + policy arrows on the 2x5 grid."""
     _ensure_out()
     fig, ax = plt.subplots(figsize=(9, 3.5))
-    _draw_grid(ax, V_star, pi_star, 'Etalon: optimalna vrednosna funkcija V*(s) i politika π*(s)  [γ=0.9]')
+    _draw_grid(ax, V_star, pi_star, 'Benchmark: optimal value function V*(s) and policy pi*(s)  [gamma=0.9]')
     plt.tight_layout()
     path = os.path.join(_OUT, 'G1_Vstar_pistar.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G2 ────────────────────────────────────────────────────────────────────────
+# -- G2 ------------------------------------------------------------------------
 
 def make_g2(V_hist, V_star):
-    """G2: konvergencija iteracije Q-vrednosti — V_t(s) po iteraciji."""
+    """G2: Q-value iteration convergence — V_t(s) per iteration."""
     _ensure_out()
     fig, ax = plt.subplots(figsize=(8, 4.2))
     for i, s in enumerate(NON_TERMINAL):
@@ -386,22 +387,22 @@ def make_g2(V_hist, V_star):
         ys  = [snap[s] for snap in V_hist]
         ax.plot(ys, color=col, label=s, linewidth=2.0)
         ax.axhline(V_star[s], color=col, linestyle='--', linewidth=1.0, alpha=0.45)
-    ax.set_xlabel('Iteracija DP')
+    ax.set_xlabel('DP iteration')
     ax.set_ylabel('$V_t(s)$')
-    ax.set_title('Konvergencija iteracije Q-vrednosti po stanjima  (γ = 0.9)\n'
-                 'Pune linije: $V_t(s)$        Isprekidane: $V^*(s)$')
+    ax.set_title('Q-value iteration convergence per state  (gamma = 0.9)\n'
+                 'Solid lines: $V_t(s)$        Dashed: $V^*(s)$')
     ax.legend(ncol=2, fontsize=8)
     plt.tight_layout()
     path = os.path.join(_OUT, 'G2_QVI_konvergencija.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G3 ────────────────────────────────────────────────────────────────────────
+# -- G3 ------------------------------------------------------------------------
 
 def make_g3(V_snaps, V_star, snap_every, gamma=0.9, eps=0.1):
-    """G3: V_t(s) -> V*(s) za svih 7 stanja — glavni trazeni grafik."""
+    """G3: V_t(s) -> V*(s) for all 7 states — the main required plot."""
     _ensure_out()
     x         = np.arange(1, len(V_snaps) + 1) * snap_every
     fig, axes = plt.subplots(2, 4, figsize=(14, 6.2))
@@ -413,32 +414,32 @@ def make_g3(V_snaps, V_star, snap_every, gamma=0.9, eps=0.1):
                 color=col, linewidth=2.0, label=f'$V_t$({s})')
         ax.axhline(V_star[s], color='#333333', linestyle='--',
                    linewidth=1.4, label=f'$V^*$ = {V_star[s]:.3f}')
-        ax.set_title(f'Stanje  {s}', fontsize=10, fontweight='bold')
-        ax.set_xlabel('Epizoda', fontsize=8)
+        ax.set_title(f'State  {s}', fontsize=10, fontweight='bold')
+        ax.set_xlabel('Episode', fontsize=8)
         ax.set_ylabel('V', fontsize=8)
         ax.legend(fontsize=7.5)
     axes[7].axis('off')
     axes[7].text(0.5, 0.55,
-                 f'Q-učenje\nγ = {gamma},  ε = {eps}\n'
-                 f'Isprekidano = $V^*$ (DP etalon)',
+                 f'Q-learning\ngamma = {gamma},  eps = {eps}\n'
+                 f'Dashed = $V^*$ (DP benchmark)',
                  ha='center', va='center', fontsize=10,
                  transform=axes[7].transAxes,
                  bbox=dict(boxstyle='round,pad=0.6',
                            facecolor='#eaf4fb', edgecolor='#2e86c1',
                            linewidth=1.2, alpha=0.9))
-    fig.suptitle('Q-učenje: konvergencija $V_t(s)$ ka etalonu $V^*(s)$ po stanjima',
+    fig.suptitle('Q-learning: convergence of $V_t(s)$ to the benchmark $V^*(s)$ per state',
                  fontsize=12, fontweight='bold')
     plt.tight_layout()
     path = os.path.join(_OUT, 'G3_QL_Vt_po_stanjima.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G4 ────────────────────────────────────────────────────────────────────────
+# -- G4 ------------------------------------------------------------------------
 
 def make_g4(V_star, n_seeds=20, n_ep=10_000, snap_every=100, gamma=0.9, eps=0.1):
-    """G4: poredjenje stopa ucenja alpha — ||V_t - V*|| po epizodi."""
+    """G4: learning-rate comparison — ||V_t - V*|| per episode."""
     _ensure_out()
 
     def af_var(e):   return math.log(e + 1) / (e + 1)
@@ -449,37 +450,37 @@ def make_g4(V_star, n_seeds=20, n_ep=10_000, snap_every=100, gamma=0.9, eps=0.1)
 
     linestyles = ['-', '--', '-.', ':', '-']
     linewidths = [2.4, 1.9, 1.9, 1.9, 1.5]
-    schemes = [('log(e+1)/(e+1)', af_var), ('α=0.05', af_005),
-               ('α=0.10', af_010), ('α=0.20', af_020), ('α=0.50', af_050)]
+    schemes = [('log(e+1)/(e+1)', af_var), ('alpha=0.05', af_005),
+               ('alpha=0.10', af_010), ('alpha=0.20', af_020), ('alpha=0.50', af_050)]
     x = np.arange(1, n_ep // snap_every + 1) * snap_every
 
     fig, ax = plt.subplots(figsize=(9, 5.2))
     for idx, ((name, alpha_fn), ls, lw) in enumerate(
             zip(schemes, linestyles, linewidths)):
         col = _PAL8[idx % len(_PAL8)]
-        print(f'    G4: {name} ({n_seeds} seedova)...')
+        print(f'    G4: {name} ({n_seeds} seeds)...')
         errs = _ql_error_curve(V_star, n_seeds, n_ep, gamma, eps, alpha_fn, snap_every)
         m, s = errs.mean(0), errs.std(0)
         ax.plot(x, m, color=col, label=name, linewidth=lw, linestyle=ls)
         ax.fill_between(x, m - s, m + s, color=col, alpha=0.12)
 
-    ax.set_yscale('log')   # log skala — bolje prikazuje razlike platoa
-    ax.set_xlabel('Epizoda')
-    ax.set_ylabel('$\\|V_t - V^*\\|_\\infty$  (log skala)')
-    ax.set_title(f'Brzina konvergencije Q-učenja za različite stope učenja α\n'
-                 f'(γ={gamma}, ε={eps}, {n_seeds} izvođenja, senka = ±std)')
+    ax.set_yscale('log')   # log scale — shows the plateau differences better
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('$\\|V_t - V^*\\|_\\infty$  (log scale)')
+    ax.set_title(f'Q-learning convergence speed for different learning rates alpha\n'
+                 f'(gamma={gamma}, eps={eps}, {n_seeds} runs, shading = +/- std)')
     ax.legend(fontsize=9)
     plt.tight_layout()
     path = os.path.join(_OUT, 'G4_QL_alpha_poredjenje.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G5 ────────────────────────────────────────────────────────────────────────
+# -- G5 ------------------------------------------------------------------------
 
 def make_g5(V_star, n_seeds=20, n_ep=10_000, snap_every=100, gamma=0.9):
-    """G5: poredjenje vrednosti epsilon — ||V_t - V*|| po epizodi."""
+    """G5: epsilon comparison — ||V_t - V*|| per episode."""
     _ensure_out()
 
     def af_var(e):  return math.log(e + 1) / (e + 1)
@@ -492,61 +493,61 @@ def make_g5(V_star, n_seeds=20, n_ep=10_000, snap_every=100, gamma=0.9):
     fig, ax = plt.subplots(figsize=(9, 5.2))
     for idx, (eps, ls, lw) in enumerate(zip(epsilons, linestyles, linewidths)):
         col = _PAL8[idx % len(_PAL8)]
-        print(f'    G5: ε={eps} ({n_seeds} seedova)...')
+        print(f'    G5: eps={eps} ({n_seeds} seeds)...')
         errs = _ql_error_curve(V_star, n_seeds, n_ep, gamma, eps, af_var, snap_every)
         m, s = errs.mean(0), errs.std(0)
-        ax.plot(x, m, color=col, label=f'ε = {eps}', linewidth=lw, linestyle=ls)
+        ax.plot(x, m, color=col, label=f'eps = {eps}', linewidth=lw, linestyle=ls)
         ax.fill_between(x, m - s, m + s, color=col, alpha=0.12)
 
     ax.set_yscale('log')
-    ax.set_xlabel('Epizoda')
-    ax.set_ylabel('$\\|V_t - V^*\\|_\\infty$  (log skala)')
-    ax.set_title(f'Uticaj parametra istraživanja ε na konvergenciju Q-učenja\n'
-                 f'(γ={gamma}, α=log(e+1)/(e+1), {n_seeds} izvođenja)')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('$\\|V_t - V^*\\|_\\infty$  (log scale)')
+    ax.set_title(f'Effect of the exploration parameter eps on Q-learning convergence\n'
+                 f'(gamma={gamma}, alpha=log(e+1)/(e+1), {n_seeds} runs)')
     ax.legend(fontsize=9)
     plt.tight_layout()
     path = os.path.join(_OUT, 'G5_QL_epsilon_poredjenje.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G6 ────────────────────────────────────────────────────────────────────────
+# -- G6 ------------------------------------------------------------------------
 
 def make_g6(V09, pi09, avg09, V999, pi999, avg999):
-    """G6: naucene politike za gamma=0.9 i gamma=0.999."""
+    """G6: learned policies for gamma=0.9 and gamma=0.999."""
     _ensure_out()
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
     _draw_grid(axes[0], V09,  pi09,
-               f'Q-ucenje γ=0.9  (prosek/1000 ep = {avg09:+.3f})')
+               f'Q-learning gamma=0.9  (avg/1000 ep = {avg09:+.3f})')
     _draw_grid(axes[1], V999, pi999,
-               f'Q-ucenje γ=0.999  (prosek/1000 ep = {avg999:+.3f})')
-    fig.suptitle('Naučene politike Q-učenja za različite faktore diskontovanja',
+               f'Q-learning gamma=0.999  (avg/1000 ep = {avg999:+.3f})')
+    fig.suptitle('Q-learning policies learned for different discount factors',
                  fontsize=12, fontweight='bold')
     plt.tight_layout()
     path = os.path.join(_OUT, 'G6_QL_gamma_poredjenje.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G7 ────────────────────────────────────────────────────────────────────────
+# -- G7 ------------------------------------------------------------------------
 
 def make_g7(ep_rewards, window=300):
-    """G7: REINFORCE — sirova nagrada po epizodi + klizni prosek."""
+    """G7: REINFORCE — raw reward per episode + rolling mean."""
     _ensure_out()
     x  = np.arange(1, len(ep_rewards) + 1)
     rm = _rolling_mean(np.array(ep_rewards, dtype=float), window)
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.scatter(x, ep_rewards, alpha=0.08, color='#7fb3d3',
-               s=2, label='Nagrada (sirova)', rasterized=True)
+               s=2, label='Reward (raw)', rasterized=True)
     ax.plot(np.arange(window, len(ep_rewards) + 1), rm,
             color='#c0392b', linewidth=2.2,
-            label=f'Klizni prosek (prozor = {window})')
+            label=f'Rolling mean (window = {window})')
     ax.axhline(0, color='#555', linewidth=0.8, linestyle='--', alpha=0.5)
-    ax.set_xlabel('Epizoda')
-    ax.set_ylabel('Ukupna (sirova) nagrada')
-    ax.set_title('REINFORCE: ukupna nagrada po epizodi i klizni prosek  (γ = 0.9)',
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Total (raw) reward')
+    ax.set_title('REINFORCE: total reward per episode and rolling mean  (gamma = 0.9)',
                  fontweight='bold')
     ax.legend()
     ax.grid(alpha=0.3)
@@ -554,26 +555,26 @@ def make_g7(ep_rewards, window=300):
     path = os.path.join(_OUT, 'G7_RF_kriva_ucenja.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G8 ────────────────────────────────────────────────────────────────────────
+# -- G8 ------------------------------------------------------------------------
 
 def make_g8(theta_hist, snap_every):
-    """G8: REINFORCE — theta parametri i verovatnoce pi po stanjima."""
+    """G8: REINFORCE — theta parameters and pi probabilities per state."""
     _ensure_out()
     x    = np.arange(1, len(theta_hist) + 1) * snap_every
-    clrs = _ACT_CLR   # teal/crvena/zelena/ljubičasta
+    clrs = _ACT_CLR   # teal/red/green/purple
 
     for fname, ylabel, val_fn, extra_fn, suptitle in [
-        ('G8a_RF_theta.png', 'θ[s,a]',
+        ('G8a_RF_theta.png', 'theta[s,a]',
          lambda snap, s, a: snap[(s, a)],
          lambda ax: None,
-         'G8a — REINFORCE: parametri θ[s,a] tokom ucenja'),
-        ('G8b_RF_pi.png', 'π(a|s)',
+         'G8a — REINFORCE: parameters theta[s,a] during training'),
+        ('G8b_RF_pi.png', 'pi(a|s)',
          lambda snap, s, a: _softmax([snap[(s, aa)] for aa in ACTIONS])[ACTIONS.index(a)],
          lambda ax: ax.axhline(0.25, color='gray', linestyle=':', linewidth=0.9),
-         'G8b — REINFORCE: verovatnoce π(a|s) tokom ucenja'),
+         'G8b — REINFORCE: action probabilities pi(a|s) during training'),
     ]:
         fig, axes = plt.subplots(2, 4, figsize=(14, 6))
         axes = axes.flatten()
@@ -585,8 +586,8 @@ def make_g8(theta_hist, snap_every):
             extra_fn(ax)
             if 'pi' in fname:
                 ax.set_ylim(0, 1)
-            ax.set_title(f'Stanje {s}', fontsize=10)
-            ax.set_xlabel('Epizoda', fontsize=8)
+            ax.set_title(f'State {s}', fontsize=10)
+            ax.set_xlabel('Episode', fontsize=8)
             ax.set_ylabel(ylabel, fontsize=8)
             ax.legend(fontsize=7, ncol=2)
             ax.grid(alpha=0.3)
@@ -596,13 +597,13 @@ def make_g8(theta_hist, snap_every):
         path = os.path.join(_OUT, fname)
         fig.savefig(path, dpi=150)
         plt.close(fig)
-        print(f'  Sacuvano: {path}')
+        print(f'  Saved: {path}')
 
 
-# ── G9 ────────────────────────────────────────────────────────────────────────
+# -- G9 ------------------------------------------------------------------------
 
 def make_g9(n_seeds=10, n_ep=20_000, gamma=0.9, window=300):
-    """G9: REINFORCE — poredjenje stopa ucenja (klizni prosek nagrade)."""
+    """G9: REINFORCE — learning-rate comparison (reward rolling mean)."""
     _ensure_out()
 
     def af_var(e):  return math.log(e + 1) / (e + 1)
@@ -612,15 +613,15 @@ def make_g9(n_seeds=10, n_ep=20_000, gamma=0.9, window=300):
 
     linestyles = ['-', '--', '-.', ':']
     linewidths = [2.3, 1.9, 1.9, 1.9]
-    schemes    = [('log(e+1)/(e+1)', af_var), ('α=0.001', af_001),
-                  ('α=0.01', af_01), ('α=0.05', af_05)]
+    schemes    = [('log(e+1)/(e+1)', af_var), ('alpha=0.001', af_001),
+                  ('alpha=0.01', af_01), ('alpha=0.05', af_05)]
     sim = Simulator()
 
     fig, ax = plt.subplots(figsize=(10, 5.2))
     for idx, ((name, alpha_fn), ls, lw) in enumerate(
             zip(schemes, linestyles, linewidths)):
         col = _PAL8[idx % len(_PAL8)]
-        print(f'    G9: {name} ({n_seeds} seedova)...')
+        print(f'    G9: {name} ({n_seeds} seeds)...')
         all_rw = []
         for seed in range(n_seeds):
             random.seed(seed)
@@ -634,42 +635,42 @@ def make_g9(n_seeds=10, n_ep=20_000, gamma=0.9, window=300):
         ax.fill_between(x_rm, m - sd, m + sd, color=col, alpha=0.12)
 
     ax.axhline(0, color='#888', linewidth=0.8, linestyle='--', alpha=0.5)
-    ax.set_xlabel('Epizoda')
-    ax.set_ylabel(f'Klizni prosek nagrade  (prozor = {window})')
-    ax.set_title(f'REINFORCE: uticaj stope učenja α na brzinu konvergencije\n'
-                 f'(γ = {gamma}, {n_seeds} izvođenja, senka = ±std)')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel(f'Reward rolling mean  (window = {window})')
+    ax.set_title(f'REINFORCE: effect of the learning rate alpha on convergence speed\n'
+                 f'(gamma = {gamma}, {n_seeds} runs, shading = +/- std)')
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
     plt.tight_layout()
     path = os.path.join(_OUT, 'G9_RF_alpha_poredjenje.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G10 ───────────────────────────────────────────────────────────────────────
+# -- G10 -------------------------------------------------------------------------
 
 def make_g10(theta):
-    """G10: REINFORCE — naučena politika na mreži 2×5."""
+    """G10: REINFORCE — learned policy on the 2x5 grid."""
     _ensure_out()
     pi_rf = _policy_from_theta(theta)
     V_rf  = {s: max(_softmax([theta[(s, a)] for a in ACTIONS]))
              for s in NON_TERMINAL}
     fig, ax = plt.subplots(figsize=(9, 3.5))
     _draw_grid(ax, V_rf, pi_rf,
-               'REINFORCE: naučena politika  (vrednost ćelije = max π(a|s))',
+               'REINFORCE: learned policy  (cell value = max pi(a|s))',
                v_min=0.25, v_max=1.0)
     plt.tight_layout()
     path = os.path.join(_OUT, 'G10_RF_politika.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
-# ── G11 ───────────────────────────────────────────────────────────────────────
+# -- G11 -------------------------------------------------------------------------
 
 def make_g11(V_star, pi_star, Q_ql, theta):
-    """G11: sumarno poredjenje DP / Q-ucenje / REINFORCE."""
+    """G11: summary comparison of DP / Q-learning / REINFORCE."""
     _ensure_out()
     pi_ql = {s: _argmax_a(Q_ql, s) for s in NON_TERMINAL}
     V_ql  = {s: max(Q_ql.get((s, a), 0.0) for a in ACTIONS) for s in NON_TERMINAL}
@@ -678,41 +679,41 @@ def make_g11(V_star, pi_star, Q_ql, theta):
              for s in NON_TERMINAL}
     fig, axes = plt.subplots(1, 3, figsize=(18, 4))
     _draw_grid(axes[0], V_star, pi_star,
-               'DP — Iteracija Q-vrednosti\n(V*, π* — etalon)')
+               'DP — Q-value iteration\n(V*, pi* — benchmark)')
     _draw_grid(axes[1], V_ql,   pi_ql,
-               'Q-ucenje\n(γ=0.9, α=log/(e+1), 10 000 ep.)')
+               'Q-learning\n(gamma=0.9, alpha=log/(e+1), 10,000 ep.)')
     _draw_grid(axes[2], V_rf,   pi_rf,
-               'REINFORCE\n(γ=0.9, α=log/(e+1), 30 000 ep.)',
+               'REINFORCE\n(gamma=0.9, alpha=log/(e+1), 30,000 ep.)',
                v_min=0.25, v_max=1.0)
-    fig.suptitle('Sumarno poređenje naučenih politika: DP etalon / Q-učenje / REINFORCE',
+    fig.suptitle('Summary comparison of learned policies: DP benchmark / Q-learning / REINFORCE',
                  fontsize=12, fontweight='bold')
     plt.tight_layout()
     path = os.path.join(_OUT, 'G11_sumarno.png')
     fig.savefig(path, dpi=150)
     plt.close(fig)
-    print(f'  Sacuvano: {path}')
+    print(f'  Saved: {path}')
 
 
 # =============================================================================
-# Pokretanje eksperimenata i generisanje grafika  (python homework_3.py)
+# Run experiments and generate plots  (python homework_3.py)
 # =============================================================================
 
 if __name__ == '__main__':
-    # ── Deo 1: verifikacija modela prelaza ───────────────────────────────────
-    dist = transition_dist('A1', 'desno')
+    # -- Part 1: verify the transition model -----------------------------------
+    dist = transition_dist('A1', 'right')
     ok   = all(abs(dist.get(k, 0) - v) < 1e-9
                for k, v in {'A2': 0.6, 'A1': 0.3, 'B1': 0.1}.items())
-    print(f"[DEO 1] verifikacija prelaza A1/desno: {ok}  {dist}")
+    print(f"[PART 1] transition verification A1/right: {ok}  {dist}")
 
-    # ── Deo 2: iteracija Q-vrednosti ─────────────────────────────────────────
-    print("\n[DEO 2] Iteracija Q-vrednosti ...")
+    # -- Part 2: Q-value iteration ----------------------------------------------
+    print("\n[PART 2] Q-value iteration ...")
     Q, V_star, pi_star, V_hist = q_value_iteration(gamma=0.9)
-    print(f"  γ=0.9  → konvergencija za {len(V_hist)} iteracija")
+    print(f"  gamma=0.9  -> converged after {len(V_hist)} iterations")
     print(f"  V*: { {s: round(V_star[s], 3) for s in NON_TERMINAL} }")
 
     _, V_star_999, pi_star_999, _ = q_value_iteration(gamma=0.999)
 
-    # ── Deo 3: Q-učenje ──────────────────────────────────────────────────────
+    # -- Part 3: Q-learning -------------------------------------------------------
     random.seed(0)
     sim = Simulator()
 
@@ -722,7 +723,7 @@ if __name__ == '__main__':
     def alpha_const(_e):
         return 0.1
 
-    print("\n[DEO 3] Q-učenje (γ=0.9, ε=0.1, α=log/(e+1), 10 000 ep.) ...")
+    print("\n[PART 3] Q-learning (gamma=0.9, eps=0.1, alpha=log/(e+1), 10,000 ep.) ...")
     Q_ql, V_snaps_var, _ = q_learning(
         sim, n_ep=10_000, gamma=0.9, eps=0.1, alpha_fn=alpha_var, snapshot_every=100
     )
@@ -730,16 +731,16 @@ if __name__ == '__main__':
     V_ql  = {s: max(Q_ql[(s, a)] for a in ACTIONS) for s in NON_TERMINAL}
     avg10 = test_policy(sim, Q_ql, n_test=10)
     avg1k = test_policy(sim, Q_ql, n_test=1000)
-    print(f"  Greška |V_t-V*|∞ (posl. snapshot): "
+    print(f"  Error |V_t-V*|inf (last snapshot): "
           f"{ {s: round(abs(V_snaps_var[-1][s]-V_star[s]),3) for s in NON_TERMINAL} }")
-    print(f"  Test greedy (γ=0.9): 10 ep={avg10:+.3f},  1000 ep={avg1k:+.3f}")
+    print(f"  Greedy test (gamma=0.9): 10 ep={avg10:+.3f},  1000 ep={avg1k:+.3f}")
 
-    print("\n[DEO 3] Q-učenje (γ=0.9, α=0.1 konst.) ...")
+    print("\n[PART 3] Q-learning (gamma=0.9, alpha=0.1 const.) ...")
     Q_const, V_snaps_const, _ = q_learning(
         sim, n_ep=10_000, gamma=0.9, eps=0.1, alpha_fn=alpha_const, snapshot_every=100
     )
 
-    print("\n[DEO 3] Q-učenje (γ=0.999, α=log/(e+1)) ...")
+    print("\n[PART 3] Q-learning (gamma=0.999, alpha=log/(e+1)) ...")
     Q_ql999, _, _ = q_learning(
         sim, n_ep=10_000, gamma=0.999, eps=0.1, alpha_fn=alpha_var, snapshot_every=100
     )
@@ -747,10 +748,10 @@ if __name__ == '__main__':
     V_ql999   = {s: max(Q_ql999[(s, a)] for a in ACTIONS) for s in NON_TERMINAL}
     avg10_999 = test_policy(sim, Q_ql999, n_test=10)
     avg1k_999 = test_policy(sim, Q_ql999, n_test=1000)
-    print(f"  Test greedy (γ=0.999): 10 ep={avg10_999:+.3f},  1000 ep={avg1k_999:+.3f}")
+    print(f"  Greedy test (gamma=0.999): 10 ep={avg10_999:+.3f},  1000 ep={avg1k_999:+.3f}")
 
-    # ── Deo 4: REINFORCE ─────────────────────────────────────────────────────
-    print("\n[DEO 4] REINFORCE (γ=0.9, α=log/(e+1), 30 000 ep.) ...")
+    # -- Part 4: REINFORCE --------------------------------------------------------
+    print("\n[PART 4] REINFORCE (gamma=0.9, alpha=log/(e+1), 30,000 ep.) ...")
     theta, ep_rewards_rf, theta_hist = reinforce(
         sim, n_ep=30_000, gamma=0.9, alpha_fn=alpha_var, snapshot_every=200
     )
@@ -758,32 +759,32 @@ if __name__ == '__main__':
     match_ok = sum(pi_rf[s] == pi_star[s] for s in NON_TERMINAL)
     avg_first = sum(ep_rewards_rf[:1000])  / 1000
     avg_last  = sum(ep_rewards_rf[-1000:]) / 1000
-    print(f"  Poklapanje s π*: {match_ok}/7")
-    print(f"  Prosečna nagrada: prvih 1000 ep={avg_first:+.3f}, posl. 1000 ep={avg_last:+.3f}")
+    print(f"  Matches with pi*: {match_ok}/7")
+    print(f"  Average reward: first 1000 ep={avg_first:+.3f}, last 1000 ep={avg_last:+.3f}")
 
-    # =========================================================================
-    # Generisanje grafika G1–G11
-    # =========================================================================
-    print('\n=== Generisanje grafika ===')
+    # =============================================================================
+    # Generate plots G1-G11
+    # =============================================================================
+    print('\n=== Generating plots ===')
 
     make_g1(V_star, pi_star)
     make_g2(V_hist, V_star)
     make_g3(V_snaps_var, V_star, snap_every=100)
 
-    print('  G4: poredjenje alpha (multi-seed, moze trajati ~1 min)...')
+    print('  G4: alpha comparison (multi-seed, may take ~1 min)...')
     make_g4(V_star)
 
-    print('  G5: poredjenje epsilon (multi-seed, moze trajati ~1 min)...')
+    print('  G5: epsilon comparison (multi-seed, may take ~1 min)...')
     make_g5(V_star)
 
     make_g6(V_ql, pi_ql, avg1k, V_ql999, pi_ql999, avg1k_999)
     make_g7(ep_rewards_rf)
     make_g8(theta_hist, snap_every=200)
 
-    print('  G9: REINFORCE alpha (multi-seed, moze trajati ~2 min)...')
+    print('  G9: REINFORCE alpha (multi-seed, may take ~2 min)...')
     make_g9()
 
     make_g10(theta)
     make_g11(V_star, pi_star, Q_ql, theta)
 
-    print(f'\nSvi grafici sacuvani u: {_OUT}')
+    print(f'\nAll plots saved to: {_OUT}')

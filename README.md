@@ -1,11 +1,10 @@
 # Algorithms for Artificial Intelligence
 ### University of Belgrade — School of Electrical Engineering (ETF)
-**Course:** 13E054VI — Artificial Intelligence  
 **Author:** Mihajlo Stevanović (2022/0315)
 
 ---
 
-A growing collection of AI algorithm implementations developed as coursework at ETF Belgrade. Each homework covers a distinct area of artificial intelligence — from classical search and optimization to modern machine learning and autonomous systems.
+A growing collection of AI algorithm implementations developed as coursework at ETF Belgrade. Each homework covers a distinct area of artificial intelligence — from classical search and optimization to probabilistic reasoning and reinforcement learning.
 
 All implementations are written in **Python** and include experimental analysis, convergence plots, and Monte Carlo validation where applicable.
 
@@ -13,11 +12,13 @@ All implementations are written in **Python** and include experimental analysis,
 
 ## Homeworks
 
-| # | Topic | Algorithms | Status |
-|---|---|---|---|
-| [HW1](src/homework_1/) | Local Search | Simulated Annealing · Genetic Algorithm · PSO | ✅ Done |
-| HW2 | — | — | 🔜 Coming soon |
-| HW3 | — | — | 🔜 Coming soon |
+| # | Course | Topic | Algorithms | Status |
+|---|---|---|---|---|
+| [HW1](src/homework_1/) | 13E054VI — Artificial Intelligence | Local Search | Simulated Annealing · Genetic Algorithm · PSO | ✅ Done |
+| [HW2](src/homework_2/) | 13E054VI — Artificial Intelligence | Bayesian Networks & Particle Filters | Variable Elimination · Rejection Sampling · Gibbs Sampling · Particle Filter | ✅ Done |
+| [HW3](src/homework_3/) | 13E053VI — Reinforcement Learning | Reinforcement Learning | Q-Value Iteration · Q-Learning · REINFORCE | ✅ Done |
+
+Each entry links to a homework folder with its own `README.md` covering the problem definition, methods, and results in detail.
 
 ---
 
@@ -26,9 +27,9 @@ All implementations are written in **Python** and include experimental analysis,
 ```
 .
 └── src/
-    ├── homework_1/        # Local search & metaheuristic optimization
-    ├── homework_2/        # (upcoming)
-    └── ...
+    ├── homework_1/        # Local search: SA, GA, PSO
+    ├── homework_2/        # Bayesian network inference & particle filter tracking
+    └── homework_3/        # Q-value iteration, Q-learning, REINFORCE
 ```
 
 ---
@@ -39,9 +40,11 @@ All implementations are written in **Python** and include experimental analysis,
 Python 3.x
 numpy
 matplotlib
+scipy
+networkx
 ```
 
-Each homework folder may have its own additional dependencies listed in a local `README.md`.
+Each homework folder's `README.md` lists only the dependencies it actually needs.
 
 ---
 

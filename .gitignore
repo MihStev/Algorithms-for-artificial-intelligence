@@ -26,5 +26,23 @@ env/
 .idea/
 *.DS_Store
 
+# Type checking
+.mypy_cache/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.toc
+
 # Claude
 CLAUDE.md
+
+# Personal working notes (not part of the graded deliverable)
+src/homework_3/podsetnik.md
+src/homework_3/plan_implementacije_domaci3.md
+src/homework_3/UP_domaci3_kontekst.md
+src/homework_3/ETF_Ucenje_Podsticanjem_Domaci_3.md.txt
