@@ -15,8 +15,7 @@ env/
 .ipynb_checkpoints/
 *.ipynb  # ukloni ovo ako koristiš notebook-ove
 
-# Data & outputs (opciono, zavisi hoćeš li da committuješ plots)
-*.png
+# Data & outputs (PNGs are committed so README images render on GitHub)
 *.pdf
 *.csv
 *.gif
