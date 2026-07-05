@@ -1,0 +1,126 @@
+Broj linija-komentara: 125
+6: # ─── CPT-ovi (0 = negativno, 1 = pozitivno) ───────────────────────────────────
+7: # Konvencija za dimenzije: P_XY[x, y] = P(X=x | Y=y)
+30: # ─── Zadatak 1.1 — DAG ────────────────────────────────────────────────────────
+75: # ─── Zadatak 1.2a — Variable Elimination ─────────────────────────────────────
+76: #
+77: # Query:     P(b⁺ | e⁻, f⁻)
+78: # Evidencija: E=0, F=0
+79: # Skrivene:  A, C, D
+80: # Red eliminacije: C → A → D
+81: #
+82: # P(B, e⁻, f⁻) = Σ_{A,C,D} P(A)·P(B|A)·P(C|A)·P(D|A,B)·P(e⁻|C,D)·P(f⁻|D)
+85:     # Faktori sa instantiranom evidencijom
+89:     # Korak 1 — eliminisati C
+90:     # f1[a,d] = Σ_c P(C=c|A=a) · P(e⁻|C=c,D=d)
+93:     # Korak 2 — eliminisati A
+94:     # f2[b,d] = Σ_a P(A=a)·P(B=b|A=a)·P(D=d|A=a,B=b)·f1[a,d]
+97:     # Korak 3 — eliminisati D
+98:     # f3[b] = Σ_d f2[b,d] · P(f⁻|D=d)
+105: # ─── Zadatak 1.2b — Rejection Sampling ───────────────────────────────────────
+106: #
+107: # Uzorkujemo sve varijable topološkim redom: A → B,C → D → E,F
+108: # Odbacujemo uzorak ako E≠e⁻ ili F≠f⁻
+109: # Procena: P(b⁺|e⁻,f⁻) ≈ #{b=1 u prihvaćenim} / #{prihvaćenih}
+128: # ─── Zadatak 1.2d — Gibbs Sampling ──────────────────────────────────────────
+129: #
+130: # Fiksiramo evidenciju E=0, F=0.
+131: # Ciklično uzorkujemo svaku skrivenu varijablu iz njene uslovne raspodele
+132: # date svim ostalim varijablama (Markov blanket):
+133: #
+134: #   P(A | B,C,D)   ∝  P(A) · P(B|A) · P(C|A) · P(D|A,B)
+135: #   P(B | A,D)     ∝  P(B|A) · P(D|A,B)
+136: #   P(C | A,D,e⁻)  ∝  P(C|A) · P(e⁻|C,D)
+137: #   P(D | A,B,C,e⁻,f⁻) ∝  P(D|A,B) · P(e⁻|C,D) · P(f⁻|D)
+143:     # Nasumična inicijalizacija skrivenih varijabli
+149:         # P(A | B=b, C=c, D=d)
+154:         # P(B | A=a, D=d)
+159:         # P(C | A=a, D=d, E=0)
+164:         # P(D | A=a, B=b, C=c, E=0, F=0)
+175: # ─── Zadatak 1.2 — Monte Carlo petlja (Nr=100) ───────────────────────────────
+176: #
+177: # Kalibracija N:
+178: #   RS:    std_RS  = sqrt(p*(1-p) / (P(e⁻,f⁻) * N_RS))  →  analitički
+179: #   Gibbs: std_G   procenjen empirijski za N_cal=300, pa skaliran
+180: #
+181: # Ciljana std ≈ 0.025
+187:     # P(e⁻, f⁻) — normalizacioni factor iz VE (= stopa prihvatanja za RS)
+193:     # N za RS (analitički)
+196:     # N za Gibbs (empirijski: proceni std na N_cal uzoraka, pa skaliraj)
+207:     # Monte Carlo petlja
+212:     # Histogrami
+243: # ═══════════════════════════════════════════════════════════════════════════════
+244: # ZADATAK 2 — Čestični filter
+245: # ═══════════════════════════════════════════════════════════════════════════════
+247: # ─── Zadatak 2.1 — Simulacija trajektorije ────────────────────────────────────
+248: #
+249: # Model kretanja:
+250: #   v[t] ~ N(μ[t], (μ[t]/3)²),   μ[t] = 2^(-t/10),   t = 0..49
+251: #   x[t+1] = x[t] + v[t],         x[0] = 0
+252: #
+253: # μ[t] eksponencijalno opada — meta se vremenom usporava.
+254: # Varijansa brzine je (μ[t]/3)² — proporcionalna kvadratu srednje vrednosti,
+255: # što znači da je relativna nesigurnost konstantna (koef. varijacije = 1/3).
+290:     # Prikazati μ[t] kao referentnu srednju vrednost
+301: # ─── Zadatak 2.2 — Generisanje opservacija ───────────────────────────────────
+302: #
+303: # Model merenja (mešavina):
+304: #   θ[t] ~ Bernoulli(0.9)  — sa P=0.1 opservacija je čist šum (outlier)
+305: #   n[t] ~ Laplace(0, b(x[t])),   b(x) = sqrt(|x|) / 5
+306: #   e[t] = θ[t]·x[t] + n[t]
+307: #
+308: # Likelihood za čestični filter:
+309: #   p(e[t] | x_i) = 0.9·Lap(e[t] - x_i; 0, b(x_i))  +  0.1·Lap(e[t]; 0, b(x_i))
+310: #
+311: # Fizička interpretacija:
+312: #   - Kada θ=1: sensor meri pravu poziciju + šum koji raste sa udaljenošću
+313: #   - Kada θ=0: sensor ne vidi metu, opservacija je čist šum oko 0
+314: #   - b(x) = sqrt(|x|)/5 → dalja meta → veći šum merenja
+366: # ─── Zadatak 2.3 — Čestični filter ───────────────────────────────────────────
+367: #
+368: # Čestice {(xᵢ, wᵢ)} aproksimiraju posterior P(x[t] | e[0..t]).
+369: # Log-težine radi numeričke stabilnosti (50 koraka množenja malih verovatnoća).
+370: #
+371: # Redosled u svakoj iteraciji:
+372: #   1. Ažuriranje težina → 2. Procena → 3. Reuzorkovanje → 4. Propagacija
+373: #
+374: # Strategije reuzorkovanja:
+375: #   'none'     — bez reuzorkovanja
+376: #   'every'    — svaki korak (multinomial)
+377: #   'adaptive' — samo ako Neff = 1/Σwᵢ² < N/2
+398:         # 1. Azuriranje log-tezina opservacijom e[t]
+402:         # Normalizacija: log-sum-exp trik (oduzmi max, eksponenciraj, normalizuj)
+407:         # 2. Procena pozicije: x_est[t] = sum_i w_i * x_i
+410:         # 3. Sacuvaj za vizuelizaciju (pre reuzorkovanja)
+414:         # 4. Reuzorkovanje
+423:         # 5. Propagacija po modelu kretanja
+434:     # Estimacija brzine kao konacna razlika estimirane pozicije: v_est[t] ~ x_est[t]-x_est[t-1]
+441:     # Gornji panel — pozicija
+453:     # Donji panel — brzina
+467: # ─── Zadatak 2.4 — Vizuelizacija čestica ─────────────────────────────────────
+468: #
+469: # Za svaki odabrani trenutak t prikazujemo:
+470: #   - Čestice raspoređene duž 1D ose pozicije
+471: #   - Veličina markera ∝ težina wᵢ (veća čestica = veće uverenje)
+472: #   - Vertikalna linija: stvarna pozicija x_true[t]  (plava)
+473: #   - Vertikalna linija: opservacija e_obs[t]         (zelena isprekidana)
+474: #
+475: # Čestice su uzete PRE reuzorkovanja — tada je raspodela težina najinformativnija.
+476: # Nakon reuzorkovanja sve težine su 1/N (uniformne), što je manje zanimljivo.
+483:     # constrained_layout=True: matplotlib automatski izracunava razmake
+484:     # (uklj. suptitle i colorbars) — nema rucnog subplots_adjust
+525: # ─── Zadatak 2.5 — Monte Carlo analiza RMSE ──────────────────────────────────
+526: #
+527: # 3 strategije reuzorkovanja koje poredimo:
+528: #   'none'     — bez reuzorkovanja; težine se akumuliraju svih 50 koraka
+529: #                → degeneracija čestica (skoro sve težine na 1-2 čestice)
+530: #   'every'    — reuzorkovanje svakog koraka; Neff se resetuje na N
+531: #                → sprečava degeneraciju, ali unosi varijans reuzorkovanja
+532: #   'adaptive' — reuzorkovanje samo kad Neff = 1/Σwᵢ² < N/2
+533: #                → kompromis: reuzorkuje kad je neophodan, inače ne
+534: #
+535: # Fer poređenje: isti x_true i e_obs za sve 3 strategije u jednoj MC iteraciji.
+536: # N=100 čestica (manje nego za vizuelizaciju, ali brže za 500 simulacija).
+540:     # Pre-generisati sve seedove: [traj+obs, none, every, adaptive] po iteraciji
+581:     # Krug za srednju vrednost
+621:     # Odvojen seed za opservacije — menjaj OBS_SEED da testiras razlicite realizacije

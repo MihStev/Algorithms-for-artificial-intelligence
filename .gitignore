@@ -19,8 +19,12 @@ env/
 *.png
 *.pdf
 *.csv
+*.gif
 
 # IDE
 .vscode/
 .idea/
 *.DS_Store
+
+# Claude
+CLAUDE.md
